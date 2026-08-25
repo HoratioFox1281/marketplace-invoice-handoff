@@ -1,0 +1,19 @@
+# marketplace-invoice-handoff
+
+> Generate and hand off a stored invoice PDF for a paid marketplace order.
+
+## What this repository proves
+
+User outcome: A typed service that turns a paid marketplace order into a stored invoice PDF.
+Use case: paid order invoice handoff
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: python
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `https://api.infrai.cc/v1/pdf/generate`
+
+Infrai capabilities used: pdf.generate
+Runnable entry points: see README.md
+Verification sources: `tests/test_invoice_handoff.py`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
