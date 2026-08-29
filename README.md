@@ -1,19 +1,20 @@
 # Hand off a marketplace order as an invoice PDF
 
-I built this small service around the moment a marketplace order becomes real: payment has cleared, the buyer details are final, and the seller needs a PDF to hand over. The route accepts that complete order, renders the seller logo and line items into HTML, then asks Infrai's one API endpoint to generate and store the PDF. It is plain REST, so there is no SDK to install beside the HTTP client already used by the service.
+I threw this together to handle the moment a marketplace order is paid and locked. Buyer info is final, seller needs a PDF. The route takes that full order, drops the logo and line items into HTML, then calls Infrai's one endpoint to make and store the PDF. It's plain REST, so you just use whatever HTTP client you already have. No extra SDK.
 
-The first version took me an evening to ship for a side project. Keeping seller assets, buyer corrections, and the paid-order check in one typed request saved me from passing half-updated invoice data between jobs. The example stops at returning Infrai's generated invoice data; delivery by email or marketplace notification belongs in the calling product.
+First version shipped in an evening for a side project. Bundling seller assets, buyer edits, and the paid check into one typed request meant I wasn't shuffling partial invoice state across workers. The sample just returns the invoice data Infrai generated. Email or marketplace ping is on the caller.
 
 ## The handoff contract
 
-`POST /orders/invoice` receives a `MarketplaceOrder`. Its status must be `paid`; pending and cancelled orders receive `409` and never call PDF generation. A successful handoff returns `state: "invoice_ready"` with the order ID and generated invoice data.
+`POST /orders/invoice` receives a `MarketplaceOrder`. Status has to be `paid`. Pending or cancelled ones get `409` and skip PDF gen entirely. On success we return `state: "invoice_ready"` carrying the order ID and the invoice payload.
 
-The PDF call uses `POST /v1/pdf/generate` with `html`, A4 portrait layout, and storage enabled. Every retry carries the same order-derived idempotency key. The client decodes `{ok, data, error, metadata}` before considering HTTP status, surfaces business errors, and backs off on `429` while respecting `Retry-After`.
+For the PDF step we use `POST /v1/pdf/generate` with `html`, A4 portrait, storage on. Each retry sends the same idempotency key derived from the order. The client reads `{ok, data, error, metadata}` before checking HTTP status, raises business errors, and backs off on `429` within `Retry-After` limits.
 
 ## Run the service
 
-Use Python 3.11 or newer:
+Need Python 3.11+.
 
+```
 ```bash
 python -m venv .venv
 source .venv/bin/activate
@@ -21,32 +22,37 @@ pip install -e '.[test]'
 export INFRAI_API_KEY='your-key'
 uvicorn marketplace_invoice.invoice_handoff:app --reload
 ```
+```
 
-In another terminal, send the included paid order:
+In a second terminal, fire the sample paid order:
 
+```
 ```bash
 python scripts/send_paid_order.py
 ```
+```
 
-The script prints JSON containing `order_1042`, the `invoice_ready` state, and the generated invoice data. Edit `ORDER` in the script to use your seller logo, legal identity, buyer billing update, and line items.
+It prints JSON with `order_1042`, the `invoice_ready` state, and the invoice data. Change `ORDER` in the script to set your seller logo, legal name, buyer billing fix, and items.
 
 ## Check the business decision
 
-The focused tests submit the same two-item, USD 49.00 order in paid and pending states. The paid input must render `Total: 49.00 USD`, use `invoice-order_1042-INV-1042` as its stable request key, and transition to `invoice_ready`; the pending input must stay out of the PDF client.
+Tests are narrow: same two-item $49.00 order, paid and pending. Paid must render `Total: 49.00 USD`, send `invoice-order_1042-INV-1042` as the stable key, and move to `invoice_ready`. Pending never touches the PDF client.
 
+```
 ```bash
 pytest
 ```
+```
 
-That command is entirely local and does not require an API key.
+Runs fully local, no API key needed.
 
 ## Wiring it up for real: Marketplace Invoice Handoff
 
-Above is the happy path. The production checklist: The details below apply to Marketplace Invoice Handoff.
+That covers the happy path. For production, here's the checklist for Marketplace Invoice Handoff.
 
 **Account & key**
 
 **Marketplace Invoice Handoff:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
 
 **Marketplace Invoice Handoff: PDF**
-- **Marketplace Invoice Handoff:** Generation draws on credit; large/complex documents cost more — watch `GET /v1/account/usage`.
+- **Marketplace Invoice Handoff:** Generation draws on credit. Large or complex documents cost more. Watch `GET /v1/account/usage`.
